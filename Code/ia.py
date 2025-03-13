@@ -3,7 +3,7 @@ import rsk
 from rsk import constants
 GREEN = -1
 BLUE = 1
-BallRayon = 0.1
+BallRayon = 0.08
 
 class ia:
     
@@ -29,9 +29,10 @@ class ia:
                 # Le robot doit forcement passer derriere la balle dcp on check sa au cas ou la balle est sur 
                 # sont chemin
                 if bot.pose[1] < client.ball[1] + 0.15 and bot.pose[1] > client.ball[1] - 0.15:
-                    # self.speedGoto((bot.pose[0],client.ball[1] + 0.36,bot.pose[2]))
-                    self.goto((bot.pose[0],client.ball[1] + 0.36,bot.pose[2]),0,0.2)
-                self.goto((client.ball[0] - 0.3,bot.pose[1],bot.pose[2]),0.2,0)
+                    self.speedGoto((bot.pose[0],client.ball[1] + 0.1,bot.pose[2]))
+                    # self.goto((bot.pose[0],client.ball[1] + 0.16,bot.pose[2]),0,0.2)
+                self.speedGoto((client.ball[0] - 0.1,bot.pose[1],bot.pose[2]))
+                # self.goto((client.ball[0] - 0.18,bot.pose[1],bot.pose[2]),0.2,0)
             # Check si le robot est au dessus ou en dessous de la balle car des truc sont pas les meme
             if client.ball[1] < bot.pose[1]:
                 nAngle = self.angleBetween(client.ball, (goal[0],-0.25))
@@ -47,7 +48,7 @@ class ia:
                 botgo = [client.ball[0] - BallRayon,
                      0.25 - ((goal[0] - client.ball[0]) * math.tan(nAngle)),
                     nAngle + (math.pi/2) + (2*math.pi/3)]
-            bot.goto((botgo[0],botgo[1],botgo[2]), wait=True)
+            bot.goto((botgo[0],botgo[1],botgo[2]))
         else:
             # Meme chose qu'au dessus sauf que on doit faire des addition ou d'autre truc a la con
             # Comme c'est pas le meme coté
@@ -101,10 +102,45 @@ class ia:
         # while abs(bot.pose[0] - target[0]) >= ximprecision and abs(bot.pose[1] - target[1]) >= yimprecision:
         #     bot.goto(target,wait=False)
         # bot.control(0,0,0)
-        # print("stop")
+        print("stop")
         
-    def speedGoto(self,target):
-        pass
+    def speedGotoNoStop(self,target,precision = 0.03):
+        bot = self.bot
+        while abs(bot.pose[0] - target[0]) >= precision or abs(bot.pose[1] - target[1]) >= precision or abs(bot.pose[2] - target[2]) >= precision:
+            x,y = self.transform_global_to_local(target[0],target[1])
+            # turn = 1
+            # if bot.pose[2] > target[2]:
+            #     turn = -1
+            if abs(x) > abs(y):
+                y = (y*1.5)/abs(x)
+                x = 1.5 if x > 0 else -1.5
+            else:
+                x = (x*1.5)/abs(y)
+                y = 1.5 if y > 0 else -1.5
+            bot.control(x, y, 0)
+        
+    def speedGoto(self, target):
+        self.speedGotoNoStop(target)
+        self.bot.control(0,0,0)
+        print("stop")
+    
+    def multipleSpeedGoto(self,targets : list):
+        for target in targets:
+            self.speedGotoNoStop(target)
+        self.bot.control(0,0,0)
+        
+    def transform_global_to_local(self,x, y):
+        bot = self.bot
+        # Translation
+        x_translated = x - bot.pose[0]
+        y_translated = y - bot.pose[1]
+
+        # Rotation inverse
+        angle = bot.pose[2]
+        x_local = x_translated * math.cos(-angle) - y_translated * math.sin(-angle)
+        y_local = x_translated * math.sin(-angle) + y_translated * math.cos(-angle)
+
+        return x_local, y_local
         
     
     def angleBetween(self,p1,p2):

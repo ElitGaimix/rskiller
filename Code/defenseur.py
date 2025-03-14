@@ -1,22 +1,19 @@
+import numpy as np
+import ia
 import math
 import rsk
 from rsk import constants
-
-# Créé un client Robot Soccer Kit, qui permettra
-# de communiquer avec le simulateur de soccer
+from time import perf_counter
+import time
+GREEN = -1
+BLUE = 1
+TEAM = GREEN
 client = rsk.Client()
+bot1 = ia.ia(client, client.green1,TEAM)
+bot2 = ia.ia(client, client.blue1,BLUE)
 
-# Boucle infinie
 while True:
-    # Récupération de la position de la balle
-    balle_x = client.ball[0]
-    balle_y = client.ball[1]
-
-    # Définition de la position cible du robot
-    x = constants.field_width / 2.0
-    y = balle_y
-    orientation = math.radians(180)
-
-    # La fonction goto permet de déplacer le robot vers des
-    # coordonnées (x, y, orientation)
-    client.green1.goto((x, y, orientation),wait=False)
+    ballprediction = bot2.predictBall()
+    goal = bot1.getGoal(TEAM)
+    if goal[0] != ballprediction[0] and (ballprediction[1] < 0.3 and ballprediction[1] > -0.3):
+        bot1.bot.goto((ballprediction[0],ballprediction[1],0),wait=True)

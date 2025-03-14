@@ -1,9 +1,10 @@
 import math
 import rsk
+import time
 from rsk import constants
 GREEN = -1
 BLUE = 1
-BallRayon = 0.08
+
 
 class ia:
     
@@ -11,6 +12,8 @@ class ia:
         self.client = client
         self.bot = bot
         self.team = team
+        self.max_speed = 3
+        self.gap_ball = 0.1
         
     def transfertToGallPosition(self):
         client = self.client
@@ -22,33 +25,32 @@ class ia:
                                                 # elle va dans le but on place le bot et tire
             if(ballprediction[1] < 0.25 and ballprediction[1] > -0.25) and goal[0] != ballprediction[0]:
                 angle = self.angleBetween(bot.pose,client.ball)
-                bot.goto((client.ball[0] - BallRayon,bot.pose[1],angle), wait=True)
+                bot.goto((client.ball[0] - self.gap_ball,bot.pose[1],angle), wait=True)
                 return
             # Si le robot est du mauvais coté pour tirer
             if client.ball[0] < bot.pose[0]:
                 # Le robot doit forcement passer derriere la balle dcp on check sa au cas ou la balle est sur 
                 # sont chemin
                 if bot.pose[1] < client.ball[1] + 0.15 and bot.pose[1] > client.ball[1] - 0.15:
-                    self.speedGoto((bot.pose[0],client.ball[1] + 0.1,bot.pose[2]))
-                    # self.goto((bot.pose[0],client.ball[1] + 0.16,bot.pose[2]),0,0.2)
-                self.speedGoto((client.ball[0] - 0.1,bot.pose[1],bot.pose[2]))
-                # self.goto((client.ball[0] - 0.18,bot.pose[1],bot.pose[2]),0.2,0)
+                    self.speedGoto((bot.pose[0],client.ball[1] + 0.16,bot.pose[2]))
+                self.speedGoto((client.ball[0] - 0.18,bot.pose[1],bot.pose[2]))
             # Check si le robot est au dessus ou en dessous de la balle car des truc sont pas les meme
             if client.ball[1] < bot.pose[1]:
                 nAngle = self.angleBetween(client.ball, (goal[0],-0.25))
                 # On calcul la position minimum pour que quand le robot tire bah sa soit dans le but
                 # Pour sa on estime que la balle doit etre au moin en -0.25, on fait en suite un petit triangle
                 #rectangle qui vient pointer sur la position du robot
-                botgo = [client.ball[0] - BallRayon,
+                botgo = [client.ball[0] - self.gap_ball,
                      -0.25 - ((goal[0] - client.ball[0]) * math.tan(nAngle)),
                     nAngle + (math.pi/2) + (math.pi/3)]
             else:
                 # meme chose mais l'angle change et on cherche pour en haut du but
                 nAngle = self.angleBetween(client.ball, (goal[0],0.25))
-                botgo = [client.ball[0] - BallRayon,
+                botgo = [client.ball[0] - self.gap_ball,
                      0.25 - ((goal[0] - client.ball[0]) * math.tan(nAngle)),
                     nAngle + (math.pi/2) + (2*math.pi/3)]
-            bot.goto((botgo[0],botgo[1],botgo[2]))
+            self.speedGoto((botgo[0],botgo[1],botgo[2]))
+            # bot.goto((botgo[0],botgo[1],botgo[2]),wait=True)
         else:
             # Meme chose qu'au dessus sauf que on doit faire des addition ou d'autre truc a la con
             # Comme c'est pas le meme coté
@@ -56,7 +58,7 @@ class ia:
             ballprediction = self.predictBall()
             if(ballprediction[1] < 0.25 and ballprediction[1] > -0.25) and goal[0] != ballprediction[0]:
                 angle = self.angleBetween(bot.pose,client.ball)
-                bot.goto((client.ball[0] + BallRayon,bot.pose[1],angle), wait=True)
+                bot.goto((client.ball[0] + self.gap_ball,bot.pose[1],angle), wait=True)
                 return
             if client.ball[0] > bot.pose[0]:
                 if bot.pose[1] < client.ball[1] + 0.15 and bot.pose[1] > client.ball[1] - 0.15:
@@ -64,12 +66,12 @@ class ia:
                 bot.goto((client.ball[0] + 0.20,bot.pose[1],bot.pose[2]),wait=True)
             if client.ball[1] < bot.pose[1]:
                 nAngle = self.angleBetween(client.ball, (goal[0],-0.25))
-                botgo = [client.ball[0] + BallRayon,
+                botgo = [client.ball[0] + self.gap_ball,
                      -0.25 - ((goal[0] - client.ball[0]) * math.tan(nAngle)),
                     nAngle + (math.pi/2) + (2*(math.pi/3))]
             else:
                 nAngle = self.angleBetween(client.ball, (goal[0],0.25))
-                botgo = [client.ball[0] + BallRayon,
+                botgo = [client.ball[0] + self.gap_ball,
                      0.25 - ((goal[0] - client.ball[0]) * math.tan(nAngle)),
                     nAngle + (math.pi/2) + (math.pi/3)]
             bot.goto((botgo[0],botgo[1],botgo[2]), wait=True)
@@ -104,45 +106,70 @@ class ia:
         # bot.control(0,0,0)
         print("stop")
         
-    def speedGotoNoStop(self,target,precision = 0.03):
+    def speedGotoNoStop(self,target,xprecision = 0.03,yprecision = 0.03,rotprecision = 0.03):
         bot = self.bot
-        while abs(bot.pose[0] - target[0]) >= precision or abs(bot.pose[1] - target[1]) >= precision or abs(bot.pose[2] - target[2]) >= precision:
-            x,y = self.transform_global_to_local(target[0],target[1])
-            # turn = 1
-            # if bot.pose[2] > target[2]:
-            #     turn = -1
-            if abs(x) > abs(y):
-                y = (y*1.5)/abs(x)
-                x = 1.5 if x > 0 else -1.5
+        max_speed = self.max_speed
+        arrived, order = bot.goto_compute_order(target, True)
+        x, y, turn = order
+        while True:
+            if not(abs(bot.pose[0] - target[0]) >= xprecision or abs(bot.pose[1] - target[1]) >= yprecision or abs(bot.pose[2] - target[2]) >= rotprecision):
+                break
+            arrived, order = bot.goto_compute_order(target, True)
+            x, y, turn = order
+            if abs(bot.pose[2] - target[2]) >= rotprecision + 0.07:
+                turn = turn*5
+                if abs(bot.pose[2] - target[2]) >= rotprecision + 0.04:
+                    turn = turn*2
             else:
-                x = (x*1.5)/abs(y)
-                y = 1.5 if y > 0 else -1.5
-            bot.control(x, y, 0)
+                turn = turn*20
+
+            if abs(bot.pose[0] - target[0]) <= xprecision + 0.05 and abs(bot.pose[1] - target[1]) <= yprecision + 0.05:
+                max_speed = 0.3
+                if abs(bot.pose[0] - target[0]) <= xprecision + 0.02 and abs(bot.pose[1] - target[1]) <= yprecision + 0.02:
+                    max_speed = 0.1
+            if abs(x) > abs(y):
+                y = (y*max_speed)/abs(x)
+                x = max_speed if x > 0 else -max_speed
+            else:
+                x = (x*max_speed)/abs(y)
+                y = max_speed if y > 0 else -max_speed
+            if abs(bot.pose[0] - target[0]) <= xprecision and abs(bot.pose[1] - target[1]) <= yprecision:
+                x = 0
+                y = 0
+            if abs(bot.pose[2] - target[2]) <= rotprecision:
+                turn = 0
+            bot.control(x, y, turn)
         
-    def speedGoto(self, target):
-        self.speedGotoNoStop(target)
+    def speedGoto(self, target,imprecision=0.03):
+        self.speedGotoNoStop(target,imprecision)
         self.bot.control(0,0,0)
+        # self.bot.goto(target,wait=True)
         print("stop")
-    
-    def multipleSpeedGoto(self,targets : list):
-        for target in targets:
-            self.speedGotoNoStop(target)
-        self.bot.control(0,0,0)
         
-    def transform_global_to_local(self,x, y):
+    def calibrateBall(self):
+        print("Calibrating ball...")
+        client = self.client
         bot = self.bot
-        # Translation
-        x_translated = x - bot.pose[0]
-        y_translated = y - bot.pose[1]
+        self.speedGoto((client.ball[0] - 0.2,client.ball[1],0))
+        arrived, order = bot.goto_compute_order((client.ball[0],client.ball[1],0), True)
+        x, y, turn = order
+        if abs(x) > abs(y):
+            y = (y*0.05)/abs(x)
+            x = 0.05 if x > 0 else -0.05
+        else:
+            x = (x*0.05)/abs(y)
+            y = 0.05 if y > 0 else -0.05
+        bot.control(x,y,turn)
+        old_positon = client.ball
+        time.sleep(0.5)
+        while abs(old_positon[1] - client.ball[1]) == 0 and abs(old_positon[0] - client.ball[0]) == 0:
+            old_positon = client.ball
+            time.sleep(0.05)
+        gap = abs(client.ball[0] - bot.pose[0])
+        print("Ball calibration done, gap:",gap)
+        self.gap_ball = gap
+        bot.control(0,0,0)
 
-        # Rotation inverse
-        angle = bot.pose[2]
-        x_local = x_translated * math.cos(-angle) - y_translated * math.sin(-angle)
-        y_local = x_translated * math.sin(-angle) + y_translated * math.cos(-angle)
-
-        return x_local, y_local
-        
-    
     def angleBetween(self,p1,p2):
         y = p2[1] - p1[1]
         x = p2[0] - p1[0]
